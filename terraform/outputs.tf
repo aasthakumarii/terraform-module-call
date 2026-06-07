@@ -37,3 +37,20 @@ output "rds_endpoint" {
 output "database_name" {
   value = module.rds.db_name
 }
+
+output "db_name" {
+  value = module.rds.db_name
+}
+
+output "db_username" {
+  value = var.db_username
+}
+
+output "db_password" {
+  value     = var.db_password
+  sensitive = true
+}
+
+output "ec2_instance_id" {
+  value = module.ec2.instance_id
+}

@@ -32,7 +32,12 @@ https://github.com/docker/compose/releases/latest/download/docker-compose-linux-
 
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-# Verify installations
+# Application directory
+mkdir -p /home/ubuntu/student-app
+
+chown -R ubuntu:ubuntu /home/ubuntu/student-app
+
+# Verification
 docker --version
 docker compose version
 aws --version
