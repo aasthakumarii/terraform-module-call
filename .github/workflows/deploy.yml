@@ -1,94 +1,132 @@
 name: Deploy Application
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 permissions:
-id-token: write
-contents: read
-
-env:
-AWS_REGION: ap-south-1
+  id-token: write
+  contents: read
 
 jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-deploy:
-runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
 
-steps:
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-  - name: Checkout Repository
-    uses: actions/checkout@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::500782030335:role/github-actions-role
+          aws-region: ap-south-1
 
-  - name: Configure AWS Credentials
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      aws-region: ap-south-1
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
-  - name: Login to ECR
-    uses: aws-actions/amazon-ecr-login@v2
+      - name: Terraform Init
+        run: terraform init
 
-  - name: Get Terraform Outputs
-    id: tf
+      - name: Get Terraform Outputs
+        id: tf
+        run: |
+          echo "EC2_IP=$(terraform output -raw ec2_public_ip)" >> $GITHUB_ENV
+          echo "BACKEND_ECR=$(terraform output -raw backend_ecr_url)" >> $GITHUB_ENV
+          echo "FRONTEND_ECR=$(terraform output -raw frontend_ecr_url)" >> $GITHUB_ENV
+          echo "RDS_ENDPOINT=$(terraform output -raw rds_endpoint)" >> $GITHUB_ENV
 
-    working-directory: terraform
+      - name: Login To ECR
+        run: |
+          aws ecr get-login-password \
+          --region ap-south-1 | docker login \
+          --username AWS \
+          --password-stdin 500782030335.dkr.ecr.ap-south-1.amazonaws.com
 
-    run: |
-      terraform init
+      - name: Build Backend Image
+        run: |
+          docker build \
+          -t $BACKEND_ECR:latest \
+          ../backend
 
-      echo "backend_ecr=$(terraform output -raw backend_ecr_url)" >> $GITHUB_OUTPUT
-      echo "frontend_ecr=$(terraform output -raw frontend_ecr_url)" >> $GITHUB_OUTPUT
-      echo "instance_id=$(terraform output -raw ec2_instance_id)" >> $GITHUB_OUTPUT
-      echo "rds_endpoint=$(terraform output -raw rds_endpoint)" >> $GITHUB_OUTPUT
-      echo "db_name=$(terraform output -raw db_name)" >> $GITHUB_OUTPUT
-      echo "db_user=$(terraform output -raw db_username)" >> $GITHUB_OUTPUT
-      echo "db_password=$(terraform output -raw db_password)" >> $GITHUB_OUTPUT
+      - name: Build Frontend Image
+        run: |
+          docker build \
+          -t $FRONTEND_ECR:latest \
+          ../frontend
 
-  - name: Build Backend Image
-    run: |
-      docker build \
-      -t ${{ steps.tf.outputs.backend_ecr }}:latest \
-      ./backend
+      - name: Push Backend Image
+        run: docker push $BACKEND_ECR:latest
 
-  - name: Push Backend Image
-    run: |
-      docker push \
-      ${{ steps.tf.outputs.backend_ecr }}:latest
+      - name: Push Frontend Image
+        run: docker push $FRONTEND_ECR:latest
 
-  - name: Build Frontend Image
-    run: |
-      docker build \
-      -t ${{ steps.tf.outputs.frontend_ecr }}:latest \
-      ./frontend
+      - name: Create Compose File
+        run: |
+          cat > docker-compose.yml <<EOF
+          services:
 
-  - name: Push Frontend Image
-    run: |
-      docker push \
-      ${{ steps.tf.outputs.frontend_ecr }}:latest
+            backend:
+              image: $BACKEND_ECR:latest
+              container_name: student_backend
 
-  - name: Prepare Compose File
-    run: |
-      cp docker/docker-compose.ec2.yml docker-compose.yml
+              environment:
+                DB_HOST: $RDS_ENDPOINT
+                DB_USER: root
+                DB_PASSWORD: password123
+                DB_NAME: student_registration
+                PORT: 5000
 
-      sed -i "s|\${DB_HOST}|${{ steps.tf.outputs.rds_endpoint }}|g" docker-compose.yml
-      sed -i "s|\${DB_USER}|${{ steps.tf.outputs.db_user }}|g" docker-compose.yml
-      sed -i "s|\${DB_PASSWORD}|${{ steps.tf.outputs.db_password }}|g" docker-compose.yml
-      sed -i "s|\${DB_NAME}|${{ steps.tf.outputs.db_name }}|g" docker-compose.yml
+              ports:
+                - "5000:5000"
 
-  - name: Deploy Using SSM
-    run: |
-      COMPOSE=$(base64 -w 0 docker-compose.yml)
+              restart: always
 
-      aws ssm send-command \
-      --instance-ids "${{ steps.tf.outputs.instance_id }}" \
-      --document-name "AWS-RunShellScript" \
-      --parameters "commands=[
-      'mkdir -p /home/ubuntu/student-app',
-      'echo $COMPOSE | base64 -d > /home/ubuntu/student-app/docker-compose.yml',
-      'cd /home/ubuntu/student-app',
-      'aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 500782030335.dkr.ecr.ap-south-1.amazonaws.com',
-      'docker compose pull',
-      'docker compose down || true',
-      'docker compose up -d'
-      ]"
+            frontend:
+              image: $FRONTEND_ECR:latest
+              container_name: student_frontend
+
+              ports:
+                - "80:80"
+
+              depends_on:
+                - backend
+
+              restart: always
+          EOF
+
+      - name: Save SSH Key
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > student-key.pem
+          chmod 400 student-key.pem
+
+      - name: Copy Compose To EC2
+        run: |
+          scp \
+          -o StrictHostKeyChecking=no \
+          -i student-key.pem \
+          docker-compose.yml \
+          ubuntu@$EC2_IP:/home/ubuntu/docker-compose.yml
+
+      - name: Deploy On EC2
+        run: |
+          ssh \
+          -o StrictHostKeyChecking=no \
+          -i student-key.pem \
+          ubuntu@$EC2_IP << EOF
+
+          aws ecr get-login-password \
+          --region ap-south-1 | docker login \
+          --username AWS \
+          --password-stdin 500782030335.dkr.ecr.ap-south-1.amazonaws.com
+
+          docker compose -f docker-compose.yml pull
+
+          docker compose -f docker-compose.yml down || true
+
+          docker compose -f docker-compose.yml up -d
+
+          EOF
