@@ -31,7 +31,7 @@ output "frontend_ecr_url" {
 }
 
 output "rds_endpoint" {
-  value = module.rds.rds_endpoint
+  value = module.rds.rds_address
 }
 
 output "database_name" {
