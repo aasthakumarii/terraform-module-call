@@ -1,5 +1,5 @@
 output "rds_endpoint" {
-  value = aws_db_instance.student.endpoint
+  value = aws_db_instance.student.address
 }
 
 output "db_name" {
