@@ -132,3 +132,13 @@ jobs:
           docker compose -f docker-compose.yml up -d
 
           EOF
+
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend:** http://$EC2_IP" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend API:** http://$EC2_IP:5000" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**EC2 Instance:** $EC2_IP" >> $GITHUB_STEP_SUMMARY
