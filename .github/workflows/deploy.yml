@@ -100,14 +100,14 @@ jobs:
 
       - name: Save SSH Key
         run: |
-          echo "${{ secrets.EC2_SSH_KEY }}" > student-key.pem
-          chmod 400 student-key.pem
+          echo "${{ secrets.EC2_SSH_KEY }}" > student-key-new.pem
+          chmod 400 student-key-new.pem
 
       - name: Copy Compose To EC2
         run: |
           scp \
           -o StrictHostKeyChecking=no \
-          -i student-key.pem \
+          -i student-key-new.pem \
           docker-compose.yml \
           ubuntu@$EC2_IP:/home/ubuntu/docker-compose.yml
 
@@ -115,7 +115,7 @@ jobs:
         run: |
           ssh \
           -o StrictHostKeyChecking=no \
-          -i student-key.pem \
+          -i student-key-new.pem \
           ubuntu@$EC2_IP << EOF
 
           aws ecr get-login-password \
