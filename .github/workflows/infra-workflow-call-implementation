@@ -1,0 +1,20 @@
+name: Run Central Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Choose action"
+        required: true
+        type: choice
+        options:
+          - create
+          - destroy
+
+jobs:
+  call-infrastructure:
+    # Syntax: username/student-app-rds/.github/workflows/file.yml@branch
+    uses: aasthakumarii/student-app-rds/.github/workflows/infrastructure.yml@main
+    with:
+      action: ${{ github.event.inputs.action }}
+    secrets: inherit # Automatically passes EC2_SSH_KEY or AWS OIDC permissions if needed
