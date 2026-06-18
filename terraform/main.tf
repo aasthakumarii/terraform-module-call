@@ -25,7 +25,7 @@ data "aws_ami" "ubuntu" {
 
 module "vpc" {
 
-  source = "./modules/vpc"
+  source = "git::https://github.com/aasthakumarii/vpc-module.git?ref=main"
 
   vpc_cidr             = var.vpc_cidr
   public_subnet_cidr   = var.public_subnet_cidr
@@ -37,12 +37,12 @@ module "vpc" {
 }
 
 module "iam" {
-  source = "./modules/iam"
+  source = "git::https://github.com/aasthakumarii/iam-module.git?ref=main"
 }
 
 module "ecr" {
 
-  source = "./modules/ecr"
+  source = "git::https://github.com/aasthakumarii/ecr-module.git?ref=main"
 
   backend_repo_name  = var.backend_repo_name
   frontend_repo_name = var.frontend_repo_name
@@ -50,7 +50,7 @@ module "ecr" {
 
 module "rds" {
 
-  source = "./modules/rds"
+  source = "git::https://github.com/aasthakumarii/rds-module.git?ref=main"
 
   db_name     = var.db_name
   db_username = var.db_username
@@ -66,7 +66,7 @@ module "rds" {
 
 module "ec2" {
 
-  source = "./modules/ec2"
+  source = "git::https://github.com/aasthakumarii/ec2-module.git?ref=main"
 
   ami_id        = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
