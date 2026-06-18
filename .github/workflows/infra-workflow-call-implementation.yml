@@ -14,7 +14,7 @@ on:
 jobs:
   call-infrastructure:
     # Syntax: username/student-app-rds/.github/workflows/file.yml@branch
-    uses: aasthakumarii/student-app-rds/.github/workflows/infrastructure.yml@main
+    uses: aasthakumarii/student-app-rds/.github/workflows/infrastructure.yml@clean-main
     with:
       action: ${{ github.event.inputs.action }}
     secrets: inherit # Automatically passes EC2_SSH_KEY or AWS OIDC permissions if needed
